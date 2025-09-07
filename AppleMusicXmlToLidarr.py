@@ -71,6 +71,66 @@ def build_lidarr_json(songs: List[Dict]) -> (List[Dict], List[Dict]):
         time.sleep(1)  # MusicBrainz rate limit for anonymous requests
     return found, not_found
 
+def recheck_not_found(output_json: str, not_found_json: str):
+    """
+    Recheck items from not_found_json, append newly found MBIDs to output_json,
+    and remove matched items from not_found_json.
+    """
+    # Load existing not found items
+    try:
+        with open(not_found_json, "r", encoding="utf-8") as nf:
+            not_found_items = json.load(nf)
+    except FileNotFoundError:
+        logging.error(f"Not found file does not exist: {not_found_json}")
+        return
+    except json.JSONDecodeError:
+        logging.error(f"Invalid JSON format in: {not_found_json}")
+        return
+    
+    if not not_found_items:
+        logging.info("No items to recheck in not found file.")
+        return
+    
+    logging.info(f"Rechecking {len(not_found_items)} tracks from {not_found_json}")
+    
+    # Load existing found MBIDs
+    existing_found = []
+    try:
+        with open(output_json, "r", encoding="utf-8") as f:
+            existing_found = json.load(f)
+    except FileNotFoundError:
+        logging.info(f"Output file {output_json} not found, will create new one.")
+    except json.JSONDecodeError:
+        logging.error(f"Invalid JSON format in: {output_json}")
+        return
+    
+    # Process each not found item
+    newly_found = []
+    still_not_found = []
+    
+    for idx, song in enumerate(not_found_items, 1):
+        mbid = search_musicbrainz_recording(song["artist"], song["title"], song.get("album"))
+        if mbid:
+            newly_found.append({"MusicBrainzId": mbid})
+            logging.info(f"[{idx}/{len(not_found_items)}] {song['artist']} - {song['title']} => MBID: {mbid}")
+        else:
+            still_not_found.append(song)
+            logging.info(f"[{idx}/{len(not_found_items)}] {song['artist']} - {song['title']} => STILL NOT FOUND")
+        time.sleep(1)  # MusicBrainz rate limit for anonymous requests
+    
+    # Append newly found MBIDs to existing output JSON
+    all_found = existing_found + newly_found
+    with open(output_json, "w", encoding="utf-8") as f:
+        json.dump(all_found, f, ensure_ascii=False, indent=2)
+    
+    # Update not found JSON with remaining items
+    with open(not_found_json, "w", encoding="utf-8") as nf:
+        json.dump(still_not_found, nf, ensure_ascii=False, indent=2)
+    
+    logging.info(f"Recheck complete: {len(newly_found)} newly found, {len(still_not_found)} still not found")
+    logging.info(f"Updated {output_json} with {len(newly_found)} new MBIDs (total: {len(all_found)})")
+    logging.info(f"Updated {not_found_json} with {len(still_not_found)} remaining unmatched tracks")
+
 def main(xml_path: str, output_json: str, not_found_json: str):
     """
     Parse XML, get MBIDs, write found to output JSON, not found to a separate file.
@@ -94,8 +154,18 @@ def main(xml_path: str, output_json: str, not_found_json: str):
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Convert Apple Music Library.xml to Lidarr JSON import format with not-found items exported.")
-    parser.add_argument("xml_file", help="Path to Apple Music Library.xml")
+    parser.add_argument("--recheck", action="store_true", 
+                        help="Recheck mode: process items from not_found_json instead of parsing XML")
+    parser.add_argument("xml_file", nargs="?", help="Path to Apple Music Library.xml (not needed in recheck mode)")
     parser.add_argument("output_json", help="Output JSON file path for found items")
     parser.add_argument("not_found_json", help="Output JSON file path for not found items")
     args = parser.parse_args()
-    main(args.xml_file, args.output_json, args.not_found_json)
+    
+    if args.recheck:
+        if args.xml_file:
+            logging.warning("XML file argument ignored in recheck mode")
+        recheck_not_found(args.output_json, args.not_found_json)
+    else:
+        if not args.xml_file:
+            parser.error("xml_file is required when not in recheck mode")
+        main(args.xml_file, args.output_json, args.not_found_json)
