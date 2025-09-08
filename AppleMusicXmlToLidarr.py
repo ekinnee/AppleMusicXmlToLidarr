@@ -5,7 +5,7 @@ import urllib.request
 import json
 import time
 import logging
-from typing import List, Dict
+from typing import List, Dict, Tuple
 
 logging.basicConfig(level=logging.INFO)
 
@@ -112,7 +112,7 @@ def extract_unique_albums(xml_path: str) -> List[Dict]:
     
     return album_list
 
-def build_lidarr_json(songs: List[Dict]) -> (List[Dict], List[Dict]):
+def build_lidarr_json(songs: List[Dict]) -> Tuple[List[Dict], List[Dict]]:
     """
     For each song, lookup the MusicBrainzId and build the Lidarr-compatible dict.
     Returns two lists: found (with MBID) and not_found (for later processing).
@@ -129,7 +129,7 @@ def build_lidarr_json(songs: List[Dict]) -> (List[Dict], List[Dict]):
         time.sleep(1)  # MusicBrainz rate limit for anonymous requests
     return found, not_found
 
-def build_albums_json(albums: List[Dict]) -> (List[Dict], List[Dict]):
+def build_albums_json(albums: List[Dict]) -> Tuple[List[Dict], List[Dict]]:
     """
     For each album, lookup the release-group MusicBrainzId.
     Returns two lists: found (with MBID) and not_found (for later processing).
