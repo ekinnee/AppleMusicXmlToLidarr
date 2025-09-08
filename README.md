@@ -34,6 +34,7 @@ This will:
 
 ### Processing Albums
 
+#### Initial Processing
 Extract unique albums and get release-group MBIDs:
 
 ```bash
@@ -47,6 +48,19 @@ This will:
 - Save found release-group MBIDs to `albums.json` for Lidarr import
 - Save unmatched albums to `albums_notfound.json` for later processing
 
+#### Recheck Mode
+Reprocess albums that were not found initially:
+
+```bash
+python3 AppleMusicXmlToLidarr.py albums --recheck albums.json albums_notfound.json
+```
+
+This will:
+- Read albums from `albums_notfound.json`
+- Search for MusicBrainz release-group IDs for each album again
+- Append any newly found MBIDs to the existing `albums.json`
+- Update `albums_notfound.json` by removing successfully matched albums
+
 ### Workflow
 
 #### For Individual Tracks
@@ -58,9 +72,10 @@ This will:
 #### For Albums
 1. Run album processing to generate release-group MBIDs
 2. Import the found albums into Lidarr as release-groups
-3. Use this approach when you want to import entire albums rather than individual tracks
+3. Periodically run recheck mode to find MBIDs for previously unmatched albums
+4. Import any newly found albums into Lidarr
 
-The recheck mode is useful for tracks because:
+The recheck mode is useful for both tracks and albums because:
 - MusicBrainz database is constantly updated with new entries
 - Network issues may have caused temporary lookup failures
 - You can refine your approach or wait for better data coverage
