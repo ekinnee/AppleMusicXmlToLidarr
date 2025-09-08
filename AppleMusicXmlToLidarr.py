@@ -146,10 +146,17 @@ def build_albums_json(albums: List[Dict]) -> Tuple[List[Dict], List[Dict]]:
         time.sleep(1)  # MusicBrainz rate limit for anonymous requests
     return found, not_found
 
-def recheck_not_found(output_json: str, not_found_json: str):
+def recheck_not_found_items(output_json: str, not_found_json: str, search_func, item_type: str, get_item_key):
     """
-    Recheck items from not_found_json, append newly found MBIDs to output_json,
+    Generic method to recheck items from not_found_json, append newly found MBIDs to output_json,
     and remove matched items from not_found_json.
+    
+    Args:
+        output_json: Path to the output JSON file containing found MBIDs
+        not_found_json: Path to the JSON file containing not found items
+        search_func: Function to search for MBIDs (e.g., search_musicbrainz_recording)
+        item_type: Type of items being processed (e.g., "tracks", "albums") for logging
+        get_item_key: Function that takes an item and returns a string for logging
     """
     # Load existing not found items
     try:
@@ -163,10 +170,10 @@ def recheck_not_found(output_json: str, not_found_json: str):
         return
     
     if not not_found_items:
-        logging.info("No items to recheck in not found file.")
+        logging.info(f"No {item_type} to recheck in not found file.")
         return
     
-    logging.info(f"Rechecking {len(not_found_items)} tracks from {not_found_json}")
+    logging.info(f"Rechecking {len(not_found_items)} {item_type} from {not_found_json}")
     
     # Load existing found MBIDs
     existing_found = []
@@ -183,14 +190,14 @@ def recheck_not_found(output_json: str, not_found_json: str):
     newly_found = []
     still_not_found = []
     
-    for idx, song in enumerate(not_found_items, 1):
-        mbid = search_musicbrainz_recording(song["artist"], song["title"], song.get("album"))
+    for idx, item in enumerate(not_found_items, 1):
+        mbid = search_func(item)
         if mbid:
             newly_found.append({"MusicBrainzId": mbid})
-            logging.info(f"[{idx}/{len(not_found_items)}] {song['artist']} - {song['title']} => MBID: {mbid}")
+            logging.info(f"[{idx}/{len(not_found_items)}] {get_item_key(item)} => MBID: {mbid}")
         else:
-            still_not_found.append(song)
-            logging.info(f"[{idx}/{len(not_found_items)}] {song['artist']} - {song['title']} => {colorize_red('STILL NOT FOUND')}")
+            still_not_found.append(item)
+            logging.info(f"[{idx}/{len(not_found_items)}] {get_item_key(item)} => {colorize_red('STILL NOT FOUND')}")
         time.sleep(1)  # MusicBrainz rate limit for anonymous requests
     
     # Append newly found MBIDs to existing output JSON
@@ -204,67 +211,33 @@ def recheck_not_found(output_json: str, not_found_json: str):
     
     logging.info(f"Recheck complete: {len(newly_found)} newly found, {len(still_not_found)} still not found")
     logging.info(f"Updated {output_json} with {len(newly_found)} new MBIDs (total: {len(all_found)})")
-    logging.info(f"Updated {not_found_json} with {len(still_not_found)} remaining unmatched tracks")
+    logging.info(f"Updated {not_found_json} with {len(still_not_found)} remaining unmatched {item_type}")
+
+def recheck_not_found(output_json: str, not_found_json: str):
+    """
+    Recheck tracks from not_found_json, append newly found MBIDs to output_json,
+    and remove matched items from not_found_json.
+    """
+    def search_track(item):
+        return search_musicbrainz_recording(item["artist"], item["title"], item.get("album"))
+    
+    def get_track_key(item):
+        return f"{item['artist']} - {item['title']}"
+    
+    recheck_not_found_items(output_json, not_found_json, search_track, "tracks", get_track_key)
 
 def recheck_not_found_albums(output_json: str, not_found_json: str):
     """
     Recheck albums from not_found_json, append newly found MBIDs to output_json,
     and remove matched items from not_found_json.
     """
-    # Load existing not found albums
-    try:
-        with open(not_found_json, "r", encoding="utf-8") as nf:
-            not_found_albums = json.load(nf)
-    except FileNotFoundError:
-        logging.error(f"Not found file does not exist: {not_found_json}")
-        return
-    except json.JSONDecodeError:
-        logging.error(f"Invalid JSON format in: {not_found_json}")
-        return
+    def search_album(item):
+        return search_musicbrainz_release_group(item["artist"], item["album"])
     
-    if not not_found_albums:
-        logging.info("No albums to recheck in not found file.")
-        return
+    def get_album_key(item):
+        return f"{item['artist']} - {item['album']}"
     
-    logging.info(f"Rechecking {len(not_found_albums)} albums from {not_found_json}")
-    
-    # Load existing found MBIDs
-    existing_found = []
-    try:
-        with open(output_json, "r", encoding="utf-8") as f:
-            existing_found = json.load(f)
-    except FileNotFoundError:
-        logging.info(f"Output file {output_json} not found, will create new one.")
-    except json.JSONDecodeError:
-        logging.error(f"Invalid JSON format in: {output_json}")
-        return
-    
-    # Process each not found album
-    newly_found = []
-    still_not_found = []
-    
-    for idx, album in enumerate(not_found_albums, 1):
-        mbid = search_musicbrainz_release_group(album["artist"], album["album"])
-        if mbid:
-            newly_found.append({"MusicBrainzId": mbid})
-            logging.info(f"[{idx}/{len(not_found_albums)}] {album['artist']} - {album['album']} => MBID: {mbid}")
-        else:
-            still_not_found.append(album)
-            logging.info(f"[{idx}/{len(not_found_albums)}] {album['artist']} - {album['album']} => {colorize_red('STILL NOT FOUND')}")
-        time.sleep(1)  # MusicBrainz rate limit for anonymous requests
-    
-    # Append newly found MBIDs to existing output JSON
-    all_found = existing_found + newly_found
-    with open(output_json, "w", encoding="utf-8") as f:
-        json.dump(all_found, f, ensure_ascii=False, indent=2)
-    
-    # Update not found JSON with remaining items
-    with open(not_found_json, "w", encoding="utf-8") as nf:
-        json.dump(still_not_found, nf, ensure_ascii=False, indent=2)
-    
-    logging.info(f"Recheck complete: {len(newly_found)} newly found, {len(still_not_found)} still not found")
-    logging.info(f"Updated {output_json} with {len(newly_found)} new MBIDs (total: {len(all_found)})")
-    logging.info(f"Updated {not_found_json} with {len(still_not_found)} remaining unmatched albums")
+    recheck_not_found_items(output_json, not_found_json, search_album, "albums", get_album_key)
 
 def main(xml_path: str, output_json: str, not_found_json: str):
     """
