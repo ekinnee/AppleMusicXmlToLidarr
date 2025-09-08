@@ -16,15 +16,44 @@ def colorize_red(text: str) -> str:
     """
     return f"\033[31m{text}\033[0m"
 
+def clean_name_for_search(name: str) -> str:
+    """
+    Clean track or album names by removing common suffixes that may interfere with search matching.
+    Removes ' - Single' and ' - EP' suffixes to improve MusicBrainz search accuracy.
+    
+    Args:
+        name: The original track title or album name
+        
+    Returns:
+        Cleaned name with suffixes removed
+    """
+    if not name:
+        return name
+    
+    # Remove ' - Single' and ' - EP' suffixes (case-insensitive)
+    suffixes_to_remove = [' - Single', ' - EP', ' - single', ' - ep']
+    
+    for suffix in suffixes_to_remove:
+        if name.endswith(suffix):
+            return name[:-len(suffix)]
+    
+    return name
+
 def search_musicbrainz_recording(artist: str, title: str, album: str = None) -> str:
     """
     Query MusicBrainz for the recording MBID given artist, title, and optional album.
+    Names are preprocessed to remove common suffixes (' - Single', ' - EP') before searching
+    to improve search accuracy.
     Returns the MBID string, or empty string if not found.
     """
+    # Clean the title and album names to improve search matching
+    clean_title = clean_name_for_search(title)
+    clean_album = clean_name_for_search(album) if album else None
+    
     base_url = "https://musicbrainz.org/ws/2/recording/"
-    query = f'recording:"{title}" AND artist:"{artist}"'
-    if album:
-        query += f' AND release:"{album}"'
+    query = f'recording:"{clean_title}" AND artist:"{artist}"'
+    if clean_album:
+        query += f' AND release:"{clean_album}"'
     params = {
         "query": query,
         "fmt": "json",
@@ -47,10 +76,15 @@ def search_musicbrainz_recording(artist: str, title: str, album: str = None) -> 
 def search_musicbrainz_release_group(artist: str, album: str) -> str:
     """
     Query MusicBrainz for the release-group MBID given artist and album.
+    Album names are preprocessed to remove common suffixes (' - Single', ' - EP') before searching
+    to improve search accuracy.
     Returns the MBID string, or empty string if not found.
     """
+    # Clean the album name to improve search matching
+    clean_album = clean_name_for_search(album)
+    
     base_url = "https://musicbrainz.org/ws/2/release-group/"
-    query = f'release:"{album}" AND artist:"{artist}"'
+    query = f'release:"{clean_album}" AND artist:"{artist}"'
     params = {
         "query": query,
         "fmt": "json",
