@@ -5,7 +5,7 @@ import urllib.request
 import json
 import time
 import logging
-from typing import List, Dict
+from typing import List, Dict, Tuple
 
 logging.basicConfig(level=logging.INFO)
 
@@ -112,7 +112,7 @@ def extract_unique_albums(xml_path: str) -> List[Dict]:
     
     return album_list
 
-def build_lidarr_json(songs: List[Dict]) -> (List[Dict], List[Dict]):
+def build_lidarr_json(songs: List[Dict]) -> Tuple[List[Dict], List[Dict]]:
     """
     For each song, lookup the MusicBrainzId and build the Lidarr-compatible dict.
     Returns two lists: found (with MBID) and not_found (for later processing).
@@ -129,7 +129,7 @@ def build_lidarr_json(songs: List[Dict]) -> (List[Dict], List[Dict]):
         time.sleep(1)  # MusicBrainz rate limit for anonymous requests
     return found, not_found
 
-def build_albums_json(albums: List[Dict]) -> (List[Dict], List[Dict]):
+def build_albums_json(albums: List[Dict]) -> Tuple[List[Dict], List[Dict]]:
     """
     For each album, lookup the release-group MusicBrainzId.
     Returns two lists: found (with MBID) and not_found (for later processing).
@@ -250,57 +250,46 @@ if __name__ == "__main__":
     import argparse
     import sys
     
-    # Check if the first argument is a subcommand
-    has_subcommand = len(sys.argv) > 1 and sys.argv[1] in ['tracks', 'albums']
+    # Set up argument parser with subcommands
+    parser = argparse.ArgumentParser(description="Convert Apple Music Library.xml to Lidarr JSON import format with not-found items exported.")
+    subparsers = parser.add_subparsers(dest='command', help='Available commands')
     
-    if has_subcommand:
-        # Use subcommands
-        parser = argparse.ArgumentParser(description="Convert Apple Music Library.xml to Lidarr JSON import format with not-found items exported.")
-        subparsers = parser.add_subparsers(dest='command', help='Available commands')
-        
-        # Tracks subcommand
-        tracks_parser = subparsers.add_parser('tracks', help='Process individual tracks (default)')
-        tracks_parser.add_argument("--recheck", action="store_true", 
-                            help="Recheck mode: process items from not_found_json instead of parsing XML")
-        tracks_parser.add_argument("xml_file", nargs="?", help="Path to Apple Music Library.xml (not needed in recheck mode)")
-        tracks_parser.add_argument("output_json", help="Output JSON file path for found items")
-        tracks_parser.add_argument("not_found_json", help="Output JSON file path for not found items")
-        
-        # Albums subcommand  
-        albums_parser = subparsers.add_parser('albums', help='Process unique albums')
-        albums_parser.add_argument("xml_file", help="Path to Apple Music Library.xml")
-        albums_parser.add_argument("output_json", help="Output JSON file path for found albums (default: albums.json)")
-        albums_parser.add_argument("not_found_json", help="Output JSON file path for not found albums (default: albums_notfound.json)")
-        
-        args = parser.parse_args()
-        
-        # Handle subcommands
-        if args.command == 'albums':
-            albums_main(args.xml_file, args.output_json, args.not_found_json)
-        elif args.command == 'tracks':
-            if args.recheck:
-                if args.xml_file:
-                    logging.warning("XML file argument ignored in recheck mode")
-                recheck_not_found(args.output_json, args.not_found_json)
-            else:
-                if not args.xml_file:
-                    tracks_parser.error("xml_file is required when not in recheck mode")
-                main(args.xml_file, args.output_json, args.not_found_json)
-    else:
-        # Backward compatibility: use original argument structure
-        parser = argparse.ArgumentParser(description="Convert Apple Music Library.xml to Lidarr JSON import format with not-found items exported.")
-        parser.add_argument("--recheck", action="store_true", 
-                            help="Recheck mode: process items from not_found_json instead of parsing XML")
-        parser.add_argument("xml_file", nargs="?", help="Path to Apple Music Library.xml (not needed in recheck mode)")
-        parser.add_argument("output_json", help="Output JSON file path for found items")
-        parser.add_argument("not_found_json", help="Output JSON file path for not found items")
-        args = parser.parse_args()
-        
+    # Tracks subcommand
+    tracks_parser = subparsers.add_parser('tracks', help='Process individual tracks')
+    tracks_parser.add_argument("--recheck", action="store_true", 
+                        help="Recheck mode: process items from not_found_json instead of parsing XML")
+    tracks_parser.add_argument("xml_file", nargs="?", help="Path to Apple Music Library.xml (not needed in recheck mode)")
+    tracks_parser.add_argument("output_json", help="Output JSON file path for found items")
+    tracks_parser.add_argument("not_found_json", help="Output JSON file path for not found items")
+    
+    # Albums subcommand  
+    albums_parser = subparsers.add_parser('albums', help='Process unique albums (default)')
+    albums_parser.add_argument("xml_file", help="Path to Apple Music Library.xml")
+    albums_parser.add_argument("output_json", help="Output JSON file path for found albums")
+    albums_parser.add_argument("not_found_json", help="Output JSON file path for not found albums")
+    
+    # Parse arguments, defaulting to 'albums' if no subcommand provided
+    # First check if we need to add the default command
+    if len(sys.argv) > 1 and sys.argv[1] not in ['tracks', 'albums', '-h', '--help']:
+        # Insert 'albums' as the default command
+        sys.argv.insert(1, 'albums')
+    
+    args = parser.parse_args()
+    
+    # If no subcommand was provided (only possible with no args or just help), show help
+    if args.command is None:
+        parser.print_help()
+        sys.exit(1)
+    
+    # Handle subcommands
+    if args.command == 'albums':
+        albums_main(args.xml_file, args.output_json, args.not_found_json)
+    elif args.command == 'tracks':
         if args.recheck:
             if args.xml_file:
                 logging.warning("XML file argument ignored in recheck mode")
             recheck_not_found(args.output_json, args.not_found_json)
         else:
             if not args.xml_file:
-                parser.error("xml_file is required when not in recheck mode")
+                tracks_parser.error("xml_file is required when not in recheck mode")
             main(args.xml_file, args.output_json, args.not_found_json)
