@@ -9,6 +9,13 @@ from typing import List, Dict
 
 logging.basicConfig(level=logging.INFO)
 
+def colorize_red(text: str) -> str:
+    """
+    Add ANSI red color codes to text for terminal display.
+    Returns the text wrapped in red color codes.
+    """
+    return f"\033[31m{text}\033[0m"
+
 def search_musicbrainz_recording(artist: str, title: str, album: str = None) -> str:
     """
     Query MusicBrainz for the recording MBID given artist, title, and optional album.
@@ -118,7 +125,7 @@ def build_lidarr_json(songs: List[Dict]) -> (List[Dict], List[Dict]):
             found.append({"MusicBrainzId": mbid})
         else:
             not_found.append(song)
-        logging.info(f"[{idx}/{len(songs)}] {song['artist']} - {song['title']} => MBID: {mbid if mbid else 'NOT FOUND'}")
+        logging.info(f"[{idx}/{len(songs)}] {song['artist']} - {song['title']} => MBID: {mbid if mbid else colorize_red('NOT FOUND')}")
         time.sleep(1)  # MusicBrainz rate limit for anonymous requests
     return found, not_found
 
@@ -135,7 +142,7 @@ def build_albums_json(albums: List[Dict]) -> (List[Dict], List[Dict]):
             found.append({"MusicBrainzId": mbid})
         else:
             not_found.append(album)
-        logging.info(f"[{idx}/{len(albums)}] {album['artist']} - {album['album']} => MBID: {mbid if mbid else 'NOT FOUND'}")
+        logging.info(f"[{idx}/{len(albums)}] {album['artist']} - {album['album']} => MBID: {mbid if mbid else colorize_red('NOT FOUND')}")
         time.sleep(1)  # MusicBrainz rate limit for anonymous requests
     return found, not_found
 
@@ -183,7 +190,7 @@ def recheck_not_found(output_json: str, not_found_json: str):
             logging.info(f"[{idx}/{len(not_found_items)}] {song['artist']} - {song['title']} => MBID: {mbid}")
         else:
             still_not_found.append(song)
-            logging.info(f"[{idx}/{len(not_found_items)}] {song['artist']} - {song['title']} => STILL NOT FOUND")
+            logging.info(f"[{idx}/{len(not_found_items)}] {song['artist']} - {song['title']} => {colorize_red('STILL NOT FOUND')}")
         time.sleep(1)  # MusicBrainz rate limit for anonymous requests
     
     # Append newly found MBIDs to existing output JSON
