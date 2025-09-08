@@ -206,6 +206,66 @@ def recheck_not_found(output_json: str, not_found_json: str):
     logging.info(f"Updated {output_json} with {len(newly_found)} new MBIDs (total: {len(all_found)})")
     logging.info(f"Updated {not_found_json} with {len(still_not_found)} remaining unmatched tracks")
 
+def recheck_not_found_albums(output_json: str, not_found_json: str):
+    """
+    Recheck albums from not_found_json, append newly found MBIDs to output_json,
+    and remove matched items from not_found_json.
+    """
+    # Load existing not found albums
+    try:
+        with open(not_found_json, "r", encoding="utf-8") as nf:
+            not_found_albums = json.load(nf)
+    except FileNotFoundError:
+        logging.error(f"Not found file does not exist: {not_found_json}")
+        return
+    except json.JSONDecodeError:
+        logging.error(f"Invalid JSON format in: {not_found_json}")
+        return
+    
+    if not not_found_albums:
+        logging.info("No albums to recheck in not found file.")
+        return
+    
+    logging.info(f"Rechecking {len(not_found_albums)} albums from {not_found_json}")
+    
+    # Load existing found MBIDs
+    existing_found = []
+    try:
+        with open(output_json, "r", encoding="utf-8") as f:
+            existing_found = json.load(f)
+    except FileNotFoundError:
+        logging.info(f"Output file {output_json} not found, will create new one.")
+    except json.JSONDecodeError:
+        logging.error(f"Invalid JSON format in: {output_json}")
+        return
+    
+    # Process each not found album
+    newly_found = []
+    still_not_found = []
+    
+    for idx, album in enumerate(not_found_albums, 1):
+        mbid = search_musicbrainz_release_group(album["artist"], album["album"])
+        if mbid:
+            newly_found.append({"MusicBrainzId": mbid})
+            logging.info(f"[{idx}/{len(not_found_albums)}] {album['artist']} - {album['album']} => MBID: {mbid}")
+        else:
+            still_not_found.append(album)
+            logging.info(f"[{idx}/{len(not_found_albums)}] {album['artist']} - {album['album']} => {colorize_red('STILL NOT FOUND')}")
+        time.sleep(1)  # MusicBrainz rate limit for anonymous requests
+    
+    # Append newly found MBIDs to existing output JSON
+    all_found = existing_found + newly_found
+    with open(output_json, "w", encoding="utf-8") as f:
+        json.dump(all_found, f, ensure_ascii=False, indent=2)
+    
+    # Update not found JSON with remaining items
+    with open(not_found_json, "w", encoding="utf-8") as nf:
+        json.dump(still_not_found, nf, ensure_ascii=False, indent=2)
+    
+    logging.info(f"Recheck complete: {len(newly_found)} newly found, {len(still_not_found)} still not found")
+    logging.info(f"Updated {output_json} with {len(newly_found)} new MBIDs (total: {len(all_found)})")
+    logging.info(f"Updated {not_found_json} with {len(still_not_found)} remaining unmatched albums")
+
 def main(xml_path: str, output_json: str, not_found_json: str):
     """
     Parse XML, get MBIDs, write found to output JSON, not found to a separate file.
@@ -264,7 +324,9 @@ if __name__ == "__main__":
     
     # Albums subcommand  
     albums_parser = subparsers.add_parser('albums', help='Process unique albums (default)')
-    albums_parser.add_argument("xml_file", help="Path to Apple Music Library.xml")
+    albums_parser.add_argument("--recheck", action="store_true", 
+                        help="Recheck mode: process albums from not_found_json instead of parsing XML")
+    albums_parser.add_argument("xml_file", nargs="?", help="Path to Apple Music Library.xml (not needed in recheck mode)")
     albums_parser.add_argument("output_json", help="Output JSON file path for found albums")
     albums_parser.add_argument("not_found_json", help="Output JSON file path for not found albums")
     
@@ -283,7 +345,14 @@ if __name__ == "__main__":
     
     # Handle subcommands
     if args.command == 'albums':
-        albums_main(args.xml_file, args.output_json, args.not_found_json)
+        if args.recheck:
+            if args.xml_file:
+                logging.warning("XML file argument ignored in recheck mode")
+            recheck_not_found_albums(args.output_json, args.not_found_json)
+        else:
+            if not args.xml_file:
+                albums_parser.error("xml_file is required when not in recheck mode")
+            albums_main(args.xml_file, args.output_json, args.not_found_json)
     elif args.command == 'tracks':
         if args.recheck:
             if args.xml_file:
