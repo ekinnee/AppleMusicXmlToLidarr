@@ -4,6 +4,19 @@ Export your Apple Music Library to the default xml and feed it to this. It looks
 
 ## Usage
 
+### Name Preprocessing
+
+The tool automatically preprocesses track and album names before searching MusicBrainz to improve matching accuracy. Specifically, it removes common suffixes that may interfere with search results:
+
+- **' - Single'** (case-insensitive) - Removed from track titles and album names
+- **' - EP'** (case-insensitive) - Removed from track titles and album names  
+
+For example:
+- "Love Me Like You Do - Single" → "Love Me Like You Do"
+- "Summer Hits 2023 - EP" → "Summer Hits 2023"
+
+This preprocessing helps find matches in MusicBrainz where the release may be stored without these commercial suffixes.
+
 ### Processing Individual Tracks (Default)
 
 #### Initial Processing
