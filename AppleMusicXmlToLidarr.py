@@ -255,7 +255,7 @@ if __name__ == "__main__":
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
     
     # Tracks subcommand
-    tracks_parser = subparsers.add_parser('tracks', help='Process individual tracks (default)')
+    tracks_parser = subparsers.add_parser('tracks', help='Process individual tracks')
     tracks_parser.add_argument("--recheck", action="store_true", 
                         help="Recheck mode: process items from not_found_json instead of parsing XML")
     tracks_parser.add_argument("xml_file", nargs="?", help="Path to Apple Music Library.xml (not needed in recheck mode)")
@@ -263,15 +263,20 @@ if __name__ == "__main__":
     tracks_parser.add_argument("not_found_json", help="Output JSON file path for not found items")
     
     # Albums subcommand  
-    albums_parser = subparsers.add_parser('albums', help='Process unique albums')
+    albums_parser = subparsers.add_parser('albums', help='Process unique albums (default)')
     albums_parser.add_argument("xml_file", help="Path to Apple Music Library.xml")
     albums_parser.add_argument("output_json", help="Output JSON file path for found albums")
     albums_parser.add_argument("not_found_json", help="Output JSON file path for not found albums")
     
-    # Parse arguments, defaulting to 'tracks' if no subcommand provided
+    # Parse arguments, defaulting to 'albums' if no subcommand provided
+    # First check if we need to add the default command
+    if len(sys.argv) > 1 and sys.argv[1] not in ['tracks', 'albums', '-h', '--help']:
+        # Insert 'albums' as the default command
+        sys.argv.insert(1, 'albums')
+    
     args = parser.parse_args()
     
-    # If no subcommand was provided, show help
+    # If no subcommand was provided (only possible with no args or just help), show help
     if args.command is None:
         parser.print_help()
         sys.exit(1)
