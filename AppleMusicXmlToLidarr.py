@@ -18,26 +18,68 @@ def colorize_red(text: str) -> str:
 
 def clean_name_for_search(name: str) -> str:
     """
-    Clean track or album names by removing common suffixes that may interfere with search matching.
-    Removes ' - Single' and ' - EP' suffixes to improve MusicBrainz search accuracy.
+    Clean track or album names by removing content that may interfere with search matching.
+    
+    Removes:
+    - Parenthetical content (e.g., "(Deluxe Edition)", "(Remastered)")
+    - Common suffixes: ' - Single' and ' - EP' (case-insensitive)
+    
+    This preprocessing improves MusicBrainz search accuracy by removing commercial 
+    or edition-specific metadata that may not be present in the database.
     
     Args:
         name: The original track title or album name
         
     Returns:
-        Cleaned name with suffixes removed
+        Cleaned name with parenthetical content and suffixes removed
     """
     if not name:
         return name
+    
+    import re
+    
+    # Remove parenthetical content - handle nested parentheses by removing from outermost
+    # Use a loop to handle multiple separate parenthetical sections
+    cleaned = name
+    while '(' in cleaned and ')' in cleaned:
+        # Find the first opening parenthesis
+        start = cleaned.find('(')
+        if start == -1:
+            break
+        
+        # Find the matching closing parenthesis (handling nesting)
+        paren_count = 0
+        end = -1
+        for i in range(start, len(cleaned)):
+            if cleaned[i] == '(':
+                paren_count += 1
+            elif cleaned[i] == ')':
+                paren_count -= 1
+                if paren_count == 0:
+                    end = i
+                    break
+        
+        if end == -1:
+            # Unmatched parenthesis, break out
+            break
+            
+        # Remove the parenthetical content and any surrounding whitespace
+        before = cleaned[:start].rstrip()
+        after = cleaned[end+1:].lstrip()
+        cleaned = (before + ' ' + after).strip()
+        
+        # If we only have whitespace left, break
+        if not cleaned.strip():
+            break
     
     # Remove ' - Single' and ' - EP' suffixes (case-insensitive)
     suffixes_to_remove = [' - Single', ' - EP', ' - single', ' - ep']
     
     for suffix in suffixes_to_remove:
-        if name.endswith(suffix):
-            return name[:-len(suffix)]
+        if cleaned.endswith(suffix):
+            cleaned = cleaned[:-len(suffix)]
     
-    return name
+    return cleaned
 
 def search_musicbrainz_recording(artist: str, title: str, album: str = None) -> str:
     """
